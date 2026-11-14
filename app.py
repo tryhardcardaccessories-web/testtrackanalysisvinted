@@ -6,6 +6,7 @@ from filters import apply_filters
 from sorting import sort_listings
 from connectors.csv_import import parse_csv
 from connectors.manual import manual_listing_form
+from connectors.vinted import search_vinted
 
 st.set_page_config(page_title="Vinted Tracker", page_icon="🔎", layout="wide")
 init_db()
@@ -26,15 +27,25 @@ with st.sidebar:
     max_price = st.number_input("Prix maximum (€)", min_value=0.0, value=0.0, step=5.0,
                                 help="0 = aucun maximum")
     only_unseen = st.checkbox("Masquer les annonces déjà vues", value=False)
-    search_button = st.button("Appliquer les filtres", type="primary", use_container_width=True)
+    search_button = st.button("Rechercher sur Vinted", type="primary", use_container_width=True)
 
 tabs = st.tabs(["Résultats", "Importer des annonces", "Recherches surveillées", "À propos"])
+
+if search_button and query.strip():
+    with st.spinner("Recherche en cours sur Vinted..."):
+        live_items = search_vinted(query)
+        if live_items:
+            upsert_listings(live_items)
+            st.success(f"{len(live_items)} annonces récupérées et enregistrées.")
+            st.rerun()
+        else:
+            st.warning("Aucune annonce trouvée ou accès restreint par Vinted.")
 
 with tabs[0]:
     all_rows = get_listings()
     df = pd.DataFrame(all_rows)
     if df.empty:
-        st.info("Aucune annonce dans la base pour le moment. Importe un CSV ou ajoute une annonce dans l’onglet « Importer des annonces ». Tu pourras ensuite connecter une source autorisée.")
+        st.info("Aucune annonce dans la base pour le moment. Lance une recherche ou importe un CSV.")
     else:
         filtered = apply_filters(
             df,
@@ -49,9 +60,8 @@ with tabs[0]:
             filtered = filtered[~filtered["listing_id"].isin(seen)]
 
         st.subheader("Annonces")
-        st.caption(f"{len(filtered)} résultat(s) dans les données importées")
+        st.caption(f"{len(filtered)} résultat(s) dans la base")
         if not filtered.empty:
-            # Tri cliquable via sélection de colonne et direction.
             c1, c2, c3 = st.columns([2, 1, 1])
             sort_col = c1.selectbox(
                 "Trier par colonne",
@@ -105,13 +115,6 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("Ajouter des annonces")
-    st.write("Pour démarrer, importe un fichier CSV provenant d'une source que tu es autorisé à utiliser.")
-    st.download_button(
-        "Télécharger le modèle CSV",
-        data="listing_id,title,price,condition,shipping_cost,date_published,url,image_url,source\nexemple-001,Miniature Teclis,42,Très bon état,3.99,2026-11-14,https://example.com/annonce,https://example.com/image.jpg,import_csv\n",
-        file_name="modele_annonces.csv",
-        mime="text/csv"
-    )
     uploaded = st.file_uploader("Importer un CSV", type=["csv"])
     if uploaded:
         try:
@@ -134,7 +137,6 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("Recherches surveillées")
-    st.write("Enregistre ici tes requêtes favorites. La surveillance automatique nécessite ensuite une source autorisée et un ordonnanceur configuré.")
     with st.form("save_search_form"):
         s_name = st.text_input("Nom de la recherche", value=query or "")
         s_query = st.text_input("Mots-clés", value=query)
@@ -151,7 +153,6 @@ with tabs[2]:
         for item in searches:
             with st.container(border=True):
                 st.markdown(f"**{item['name']}** — `{item['query']}`")
-                st.caption(f"Exclusions : {item['excluded'] or 'aucune'} · États : {item['states'] or 'tous'} · Prix : {item['min_price']}–{item['max_price'] or '∞'} €")
                 if st.button("Supprimer", key=f"del_search_{item['id']}"):
                     delete_search(item["id"])
                     st.rerun()
@@ -159,14 +160,5 @@ with tabs[2]:
         st.info("Aucune recherche enregistrée.")
 
 with tabs[3]:
-    st.subheader("À propos du projet")
-    st.markdown("""
-    Cette première version fournit l'interface, les filtres, le tri, la pagination,
-    l'historique local et l'import CSV.
-
-    **Important :** Vinted ne propose pas d'API publique générale permettant de récupérer librement toutes les annonces.
-    Aucun scraping, contournement de protection ou accès non autorisé n'est inclus.
-    Pour connecter une source en direct, utilise uniquement une API ou un fournisseur dont les droits et conditions
-    d'accès aux données Vinted ont été vérifiés. Le connecteur `connectors/provider_template.py` sert de point d'extension.
-    """)
-    st.code("streamlit run app.py", language="bash")
+    st.subheader("À propos")
+    st.markdown("Application de suivi Vinted avec connecteur de recherche direct.")
