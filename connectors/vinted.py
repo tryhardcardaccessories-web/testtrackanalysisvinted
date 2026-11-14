@@ -1,18 +1,6 @@
-import requests
+from curl_cffi import requests
 
 def search_vinted(query, per_page=20):
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-    })
-    
-    try:
-        session.get("https://www.vinted.fr/", timeout=10)
-    except Exception:
-        pass
-
     url = "https://www.vinted.fr/api/v2/catalog/items"
     params = {
         "search_text": query,
@@ -21,7 +9,8 @@ def search_vinted(query, per_page=20):
     }
     
     try:
-        response = session.get(url, params=params, timeout=10)
+        # impersonate="chrome120" permet de contourner la détection anti-bot de Vinted
+        response = requests.get(url, params=params, impersonate="chrome120", timeout=10)
         if response.status_code != 200:
             return []
         
