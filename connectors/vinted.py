@@ -1,6 +1,14 @@
 from curl_cffi import requests
 
 def search_vinted(query, per_page=20):
+    session = requests.Session()
+    
+    # 1. Établir une session valide en récupérant la page d'accueil avec les cookies français
+    try:
+        session.get("https://www.vinted.fr/", impersonate="chrome120", timeout=10)
+    except Exception:
+        pass
+
     url = "https://www.vinted.fr/api/v2/catalog/items"
     params = {
         "search_text": query,
@@ -8,9 +16,14 @@ def search_vinted(query, per_page=20):
         "page": 1
     }
     
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.vinted.fr/",
+        "Accept-Language": "fr-FR,fr;q=0.9"
+    }
+    
     try:
-        # impersonate="chrome120" permet de contourner la détection anti-bot de Vinted
-        response = requests.get(url, params=params, impersonate="chrome120", timeout=10)
+        response = session.get(url, params=params, headers=headers, impersonate="chrome120", timeout=10)
         if response.status_code != 200:
             return []
         
